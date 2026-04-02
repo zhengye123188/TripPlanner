@@ -21,6 +21,7 @@ from app.graph.nodes import (
     search_hotels,
     plan_itinerary,
     parse_output,
+    fetch_photos,
 )
 
 
@@ -30,7 +31,7 @@ def build_trip_workflow() -> StateGraph:
 
     流程：
     START → search_attractions → query_weather → search_hotels
-          → plan_itinerary → parse_output → END
+          → plan_itinerary → parse_output → fetch_photos → END
 
     Returns:
         编译后的 LangGraph app，可以直接 app.invoke(state) 调用
@@ -45,6 +46,7 @@ def build_trip_workflow() -> StateGraph:
     graph.add_node("search_hotels", search_hotels)
     graph.add_node("plan_itinerary", plan_itinerary)
     graph.add_node("parse_output", parse_output)
+    graph.add_node("fetch_photos", fetch_photos)
 
     # 3. 连接边（定义执行顺序）
     graph.add_edge(START, "search_attractions")
@@ -52,7 +54,8 @@ def build_trip_workflow() -> StateGraph:
     graph.add_edge("query_weather", "search_hotels")
     graph.add_edge("search_hotels", "plan_itinerary")
     graph.add_edge("plan_itinerary", "parse_output")
-    graph.add_edge("parse_output", END)
+    graph.add_edge("parse_output", "fetch_photos")
+    graph.add_edge("fetch_photos", END)
 
     # 4. 编译
     app = graph.compile()

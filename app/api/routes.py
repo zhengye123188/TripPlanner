@@ -13,6 +13,7 @@ FastAPI 路由 — 对外暴露 HTTP 接口
 from fastapi import APIRouter, HTTPException
 from app.schemas.models import TripRequest, TripPlanResponse
 from app.graph.workflow import get_workflow
+from app.tools.unsplash import get_photo_url
 
 router = APIRouter(prefix="/api", tags=["旅行规划"])
 
@@ -37,6 +38,7 @@ async def plan_trip(request: TripRequest):
             "raw_hotels": [],
             "raw_plan_text": "",
             "trip_plan": None,
+            "attraction_photos": {},
             "error": "",
         }
 
@@ -70,3 +72,31 @@ async def plan_trip(request: TripRequest):
 async def health_check():
     """健康检查"""
     return {"status": "healthy", "service": "trip-planner"}
+
+
+@router.get("/poi/photo")
+async def get_attraction_photo(name: str):
+    """
+    获取景点图片
+
+    前端在渲染结果页时，会为每个景点请求这个接口获取配图。
+    """
+    try:
+        # 用景点名 + "China landmark" 提高搜索准确度
+        photo_url = get_photo_url(f"{name} China landmark")
+
+        if not photo_url:
+            # 退一步，只用景点名搜
+            photo_url = get_photo_url(name)
+
+        return {
+            "success": True,
+            "message": "获取图片成功",
+            "data": {
+                "name": name,
+                "photo_url": photo_url,
+            },
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取图片失败: {str(e)}")

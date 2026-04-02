@@ -40,6 +40,7 @@ class TripState(TypedDict):
     raw_weather: list[dict]       # query_weather → 高德返回的天气列表
     raw_hotels: list[dict]        # search_hotels → 高德返回的酒店列表
     raw_plan_text: str            # plan_itinerary → LLM 生成的 JSON 文本
+    attraction_photos: dict       # fetch_photos → {"景点名": "图片URL"}
 
     # 最终输出
     trip_plan: TripPlan | None    # parse_output → 解析后的结构化旅行计划

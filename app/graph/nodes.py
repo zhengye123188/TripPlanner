@@ -1,5 +1,5 @@
 """
-LangGraph 节点函数 — 工作流的 5 个步骤
+LangGraph 节点函数 — 工作流的 6 个步骤
 
 每个节点都是一个纯函数：
 - 输入：TripState（当前的完整状态）
@@ -9,7 +9,7 @@ LangGraph 节点函数 — 工作流的 5 个步骤
 这样每个节点都可以单独测试，互不依赖。
 
 执行顺序：
-search_attractions → query_weather → search_hotels → plan_itinerary → parse_output
+search_attractions → query_weather → search_hotels → plan_itinerary → parse_output → fetch_photos
 """
 
 import json
@@ -17,6 +17,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from app.graph.state import TripState
 from app.tools.amap import search_pois, get_weather
 from app.tools.llm import get_chat_model
+from app.tools.unsplash import get_photo_url
 
 
 # ============================================================
@@ -311,3 +312,46 @@ def _create_fallback_plan(request) -> "TripPlan":
         days=days,
         overall_suggestions=f"这是{request.city}{request.travel_days}日游的备用行程，建议提前查看各景点开放时间。",
     )
+
+
+# ============================================================
+# 节点 6：为景点配图
+# ============================================================
+
+def fetch_photos(state: TripState) -> dict:
+    """
+    用 Unsplash 为每个景点搜索一张配图
+
+    读取：state["trip_plan"]（从 parse_output 拿到的结构化计划）
+    写入：直接修改 trip_plan 里每个 attraction 的 image_url
+
+    为什么放在 parse_output 之后？
+    - 必须先有结构化的景点列表，才知道要搜哪些图
+    - 图片是锦上添花，即使 Unsplash 挂了也不影响核心功能
+
+    为什么不在 plan_itinerary 之前搜图？
+    - LLM 不需要图片来规划行程，提前搜浪费时间
+    """
+    trip_plan = state.get("trip_plan")
+    if not trip_plan:
+        return {"attraction_photos": {}}
+
+    photos = {}
+    for day in trip_plan.days:
+        for attraction in day.attractions:
+            if attraction.image_url:
+                # 已经有图片了，跳过
+                continue
+
+            query = f"{attraction.name} {trip_plan.city} China landmark"
+            print(f"📷 搜索图片: {attraction.name}")
+            url = get_photo_url(query)
+
+            if url:
+                attraction.image_url = url
+                photos[attraction.name] = url
+                print(f"   ✅ 找到图片")
+            else:
+                print(f"   ⚠️ 未找到图片")
+
+    return {"trip_plan": trip_plan, "attraction_photos": photos}
