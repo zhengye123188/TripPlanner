@@ -1,4 +1,4 @@
-[README_CN.md](https://github.com/user-attachments/files/26432125/README_CN.md)
+[README_CN.md](https://github.com/user-attachments/files/26432125/README_CN.md)，接口文档 导入apifox使用
 # 🚀 TripPlanner 旅行规划系统
 
 > 一个基于多智能体（Multi-Agent）和大语言模型（LLM）的智能旅行规划系统，可根据用户需求自动生成个性化行程。
