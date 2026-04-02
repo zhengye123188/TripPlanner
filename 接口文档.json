@@ -1,0 +1,1077 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "智能旅行规划助手 API",
+    "description": "基于 LangChain + LangGraph 的多智能体旅行规划系统。\n\n## 工作流程\n1. 前端提交旅行需求表单\n2. 后端触发 LangGraph 工作流\n3. 依次执行：景点搜索 → 天气查询 → 酒店推荐 → 行程规划 → 结果解析\n4. 返回结构化旅行计划\n\n## 外部服务依赖\n- LLM API（OpenAI / DeepSeek）\n- 高德地图 API（景点、天气、路线）\n- Unsplash API（景点图片）",
+    "version": "2.0.0",
+    "contact": {
+      "name": "Trip Planner Dev"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "本地开发服务器"
+    }
+  ],
+  "tags": [
+    {
+      "name": "旅行规划",
+      "description": "核心接口：生成旅行计划"
+    },
+    {
+      "name": "地图服务",
+      "description": "POI搜索、天气查询、路线规划"
+    },
+    {
+      "name": "POI",
+      "description": "景点详情、图片获取"
+    },
+    {
+      "name": "系统",
+      "description": "健康检查等系统接口"
+    }
+  ],
+  "paths": {
+    "/api/trip/plan": {
+      "post": {
+        "tags": ["旅行规划"],
+        "summary": "生成旅行计划",
+        "description": "根据用户输入的旅行需求，触发 LangGraph 多智能体工作流，生成包含景点、餐饮、酒店、天气、预算的完整行程计划。\n\n**耗时提示**：该接口需要依次调用景点搜索、天气查询、酒店推荐、行程规划四个 Agent，整体耗时约 10-30 秒，前端建议设置 120s 超时。",
+        "operationId": "planTrip",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripRequest"
+              },
+              "examples": {
+                "beijing_3days": {
+                  "summary": "北京3日游",
+                  "value": {
+                    "city": "北京",
+                    "start_date": "2025-06-01",
+                    "end_date": "2025-06-03",
+                    "travel_days": 3,
+                    "transportation": "公共交通",
+                    "accommodation": "经济型酒店",
+                    "preferences": ["历史文化", "美食"],
+                    "free_text_input": "希望多安排一些博物馆"
+                  }
+                },
+                "shanghai_2days": {
+                  "summary": "上海2日游",
+                  "value": {
+                    "city": "上海",
+                    "start_date": "2025-07-10",
+                    "end_date": "2025-07-11",
+                    "travel_days": 2,
+                    "transportation": "自驾",
+                    "accommodation": "舒适型酒店",
+                    "preferences": ["购物", "美食"],
+                    "free_text_input": ""
+                  }
+                },
+                "chengdu_minimal": {
+                  "summary": "成都1日游（最小参数）",
+                  "value": {
+                    "city": "成都",
+                    "start_date": "2025-08-15",
+                    "end_date": "2025-08-15",
+                    "travel_days": 1,
+                    "transportation": "公共交通",
+                    "accommodation": "民宿",
+                    "preferences": [],
+                    "free_text_input": ""
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "旅行计划生成成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripPlanResponse"
+                },
+                "example": {
+                  "success": true,
+                  "message": "旅行计划生成成功",
+                  "data": {
+                    "city": "北京",
+                    "start_date": "2025-06-01",
+                    "end_date": "2025-06-03",
+                    "days": [
+                      {
+                        "date": "2025-06-01",
+                        "day_index": 0,
+                        "description": "第1天：故宫-天安门-王府井，感受皇城历史",
+                        "transportation": "公共交通",
+                        "accommodation": "经济型酒店",
+                        "hotel": {
+                          "name": "如家快捷酒店(王府井店)",
+                          "address": "北京市东城区王府井大街138号",
+                          "location": {"longitude": 116.410, "latitude": 39.914},
+                          "price_range": "300-500元",
+                          "rating": "4.2",
+                          "distance": "距故宫1.5公里",
+                          "type": "经济型酒店",
+                          "estimated_cost": 380
+                        },
+                        "attractions": [
+                          {
+                            "name": "故宫博物院",
+                            "address": "北京市东城区景山前街4号",
+                            "location": {"longitude": 116.397128, "latitude": 39.916527},
+                            "visit_duration": 180,
+                            "description": "中国明清两代的皇家宫殿，世界文化遗产",
+                            "category": "历史文化",
+                            "rating": 4.8,
+                            "ticket_price": 60
+                          },
+                          {
+                            "name": "天安门广场",
+                            "address": "北京市东城区东长安街",
+                            "location": {"longitude": 116.391468, "latitude": 39.903740},
+                            "visit_duration": 60,
+                            "description": "世界上最大的城市广场",
+                            "category": "历史文化",
+                            "rating": 4.7,
+                            "ticket_price": 0
+                          }
+                        ],
+                        "meals": [
+                          {"type": "breakfast", "name": "酒店早餐", "description": "酒店含早", "estimated_cost": 0},
+                          {"type": "lunch", "name": "故宫附近老北京炸酱面", "description": "地道北京风味", "estimated_cost": 40},
+                          {"type": "dinner", "name": "王府井小吃街", "description": "各地特色小吃", "estimated_cost": 80}
+                        ]
+                      }
+                    ],
+                    "weather_info": [
+                      {
+                        "date": "2025-06-01",
+                        "day_weather": "晴",
+                        "night_weather": "多云",
+                        "day_temp": 32,
+                        "night_temp": 20,
+                        "wind_direction": "南风",
+                        "wind_power": "1-3级"
+                      }
+                    ],
+                    "overall_suggestions": "六月的北京天气炎热，建议携带防晒用品。故宫建议上午早到避开人流高峰。",
+                    "budget": {
+                      "total_attractions": 60,
+                      "total_hotels": 380,
+                      "total_meals": 120,
+                      "total_transportation": 30,
+                      "total": 590
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "请求参数校验失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务端异常",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "detail": "生成旅行计划失败: LLM API 调用超时"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/trip/health": {
+      "get": {
+        "tags": ["旅行规划"],
+        "summary": "旅行规划服务健康检查",
+        "operationId": "tripHealthCheck",
+        "responses": {
+          "200": {
+            "description": "服务正常",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "healthy",
+                  "service": "trip-planner",
+                  "agent_name": "行程规划专家",
+                  "tools_count": 5
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "服务不可用"
+          }
+        }
+      }
+    },
+    "/api/map/poi": {
+      "get": {
+        "tags": ["地图服务"],
+        "summary": "搜索POI（兴趣点）",
+        "description": "根据关键词在指定城市搜索 POI，底层调用高德地图 API",
+        "operationId": "searchPOI",
+        "parameters": [
+          {
+            "name": "keywords",
+            "in": "query",
+            "required": true,
+            "description": "搜索关键词",
+            "schema": {"type": "string"},
+            "example": "故宫"
+          },
+          {
+            "name": "city",
+            "in": "query",
+            "required": true,
+            "description": "城市名称",
+            "schema": {"type": "string"},
+            "example": "北京"
+          },
+          {
+            "name": "citylimit",
+            "in": "query",
+            "required": false,
+            "description": "是否限制在城市范围内搜索",
+            "schema": {"type": "boolean", "default": true}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "搜索成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/POISearchResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "搜索失败"
+          }
+        }
+      }
+    },
+    "/api/map/weather": {
+      "get": {
+        "tags": ["地图服务"],
+        "summary": "查询天气",
+        "description": "查询指定城市的天气预报信息，底层调用高德地图天气 API",
+        "operationId": "getWeather",
+        "parameters": [
+          {
+            "name": "city",
+            "in": "query",
+            "required": true,
+            "description": "城市名称",
+            "schema": {"type": "string"},
+            "example": "北京"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeatherResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "查询失败"
+          }
+        }
+      }
+    },
+    "/api/map/route": {
+      "post": {
+        "tags": ["地图服务"],
+        "summary": "规划路线",
+        "description": "规划两点之间的路线，支持步行、驾车、公交三种方式",
+        "operationId": "planRoute",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteRequest"
+              },
+              "example": {
+                "origin_address": "北京市东城区景山前街4号",
+                "destination_address": "北京市东城区东长安街",
+                "origin_city": "北京",
+                "destination_city": "北京",
+                "route_type": "walking"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "规划成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "规划失败"
+          }
+        }
+      }
+    },
+    "/api/poi/detail/{poi_id}": {
+      "get": {
+        "tags": ["POI"],
+        "summary": "获取POI详情",
+        "description": "根据 POI ID 获取详细信息（来自高德地图）",
+        "operationId": "getPOIDetail",
+        "parameters": [
+          {
+            "name": "poi_id",
+            "in": "path",
+            "required": true,
+            "description": "POI ID（来自 POI 搜索结果）",
+            "schema": {"type": "string"},
+            "example": "B000A7BD6C"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "获取成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/POIDetailResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "获取失败"
+          }
+        }
+      }
+    },
+    "/api/poi/search": {
+      "get": {
+        "tags": ["POI"],
+        "summary": "搜索POI（简化版）",
+        "operationId": "searchPOISimple",
+        "parameters": [
+          {
+            "name": "keywords",
+            "in": "query",
+            "required": true,
+            "schema": {"type": "string"},
+            "example": "博物馆"
+          },
+          {
+            "name": "city",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "string", "default": "北京"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "搜索成功"
+          }
+        }
+      }
+    },
+    "/api/poi/photo": {
+      "get": {
+        "tags": ["POI"],
+        "summary": "获取景点图片",
+        "description": "根据景点名称从 Unsplash 获取图片 URL",
+        "operationId": "getAttractionPhoto",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "description": "景点名称",
+            "schema": {"type": "string"},
+            "example": "故宫"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "获取成功",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "获取图片成功",
+                  "data": {
+                    "name": "故宫",
+                    "photo_url": "https://images.unsplash.com/photo-xxx"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": ["系统"],
+        "summary": "全局健康检查",
+        "operationId": "healthCheck",
+        "responses": {
+          "200": {
+            "description": "服务正常",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "healthy",
+                  "service": "HelloAgents智能旅行助手",
+                  "version": "2.0.0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "tags": ["系统"],
+        "summary": "根路径信息",
+        "operationId": "root",
+        "responses": {
+          "200": {
+            "description": "服务信息",
+            "content": {
+              "application/json": {
+                "example": {
+                  "name": "智能旅行规划助手",
+                  "version": "2.0.0",
+                  "status": "running",
+                  "docs": "/docs",
+                  "redoc": "/redoc"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/map/health": {
+      "get": {
+        "tags": ["地图服务"],
+        "summary": "地图服务健康检查",
+        "operationId": "mapHealthCheck",
+        "responses": {
+          "200": {
+            "description": "服务正常",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "healthy",
+                  "service": "map-service",
+                  "mcp_tools_count": 12
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "服务不可用"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "TripRequest": {
+        "type": "object",
+        "required": ["city", "start_date", "end_date", "travel_days", "transportation", "accommodation"],
+        "properties": {
+          "city": {
+            "type": "string",
+            "description": "目的地城市",
+            "example": "北京"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "description": "开始日期 YYYY-MM-DD",
+            "example": "2025-06-01"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "description": "结束日期 YYYY-MM-DD",
+            "example": "2025-06-03"
+          },
+          "travel_days": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30,
+            "description": "旅行天数",
+            "example": 3
+          },
+          "transportation": {
+            "type": "string",
+            "description": "市内交通方式",
+            "enum": ["公共交通", "自驾", "步行", "骑行"],
+            "example": "公共交通"
+          },
+          "accommodation": {
+            "type": "string",
+            "description": "住宿偏好",
+            "enum": ["经济型酒店", "舒适型酒店", "豪华酒店", "民宿", "青旅"],
+            "example": "经济型酒店"
+          },
+          "preferences": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["历史文化", "自然风光", "美食", "购物", "亲子", "摄影"]
+            },
+            "default": [],
+            "description": "旅行偏好标签（多选）",
+            "example": ["历史文化", "美食"]
+          },
+          "free_text_input": {
+            "type": "string",
+            "default": "",
+            "description": "用户自由备注",
+            "example": "希望多安排一些博物馆"
+          }
+        }
+      },
+      "TripPlanResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "是否成功"
+          },
+          "message": {
+            "type": "string",
+            "description": "结果描述"
+          },
+          "data": {
+            "$ref": "#/components/schemas/TripPlan"
+          }
+        }
+      },
+      "TripPlan": {
+        "type": "object",
+        "required": ["city", "start_date", "end_date", "days", "overall_suggestions"],
+        "description": "完整旅行计划",
+        "properties": {
+          "city": {
+            "type": "string",
+            "description": "目的地城市"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "description": "开始日期"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "description": "结束日期"
+          },
+          "days": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/DayPlan"},
+            "description": "每日行程数组"
+          },
+          "weather_info": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/WeatherInfo"},
+            "default": [],
+            "description": "每日天气数组"
+          },
+          "overall_suggestions": {
+            "type": "string",
+            "description": "总体旅行建议"
+          },
+          "budget": {
+            "$ref": "#/components/schemas/Budget"
+          }
+        }
+      },
+      "DayPlan": {
+        "type": "object",
+        "required": ["date", "day_index", "description", "transportation", "accommodation"],
+        "description": "单日行程",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "日期 YYYY-MM-DD"
+          },
+          "day_index": {
+            "type": "integer",
+            "description": "第几天（从0开始）"
+          },
+          "description": {
+            "type": "string",
+            "description": "当日行程概述"
+          },
+          "transportation": {
+            "type": "string",
+            "description": "当日交通方式"
+          },
+          "accommodation": {
+            "type": "string",
+            "description": "当日住宿类型"
+          },
+          "hotel": {
+            "$ref": "#/components/schemas/Hotel"
+          },
+          "attractions": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/Attraction"},
+            "default": [],
+            "description": "景点列表（建议2-3个/天）"
+          },
+          "meals": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/Meal"},
+            "default": [],
+            "description": "餐饮列表（早中晚3餐/天）"
+          }
+        }
+      },
+      "Attraction": {
+        "type": "object",
+        "required": ["name", "address", "location", "visit_duration", "description"],
+        "description": "景点信息",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "景点名称",
+            "example": "故宫博物院"
+          },
+          "address": {
+            "type": "string",
+            "description": "详细地址",
+            "example": "北京市东城区景山前街4号"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "visit_duration": {
+            "type": "integer",
+            "description": "建议游览时间（分钟）",
+            "example": 180
+          },
+          "description": {
+            "type": "string",
+            "description": "景点描述"
+          },
+          "category": {
+            "type": "string",
+            "default": "景点",
+            "description": "景点类别"
+          },
+          "rating": {
+            "type": "number",
+            "format": "float",
+            "description": "评分"
+          },
+          "image_url": {
+            "type": "string",
+            "description": "景点图片URL"
+          },
+          "ticket_price": {
+            "type": "integer",
+            "default": 0,
+            "description": "门票价格（元）"
+          }
+        }
+      },
+      "Hotel": {
+        "type": "object",
+        "required": ["name"],
+        "description": "酒店信息",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "酒店名称"
+          },
+          "address": {
+            "type": "string",
+            "default": "",
+            "description": "酒店地址"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "price_range": {
+            "type": "string",
+            "default": "",
+            "description": "价格范围",
+            "example": "300-500元"
+          },
+          "rating": {
+            "type": "string",
+            "default": "",
+            "description": "评分"
+          },
+          "distance": {
+            "type": "string",
+            "default": "",
+            "description": "距景点距离"
+          },
+          "type": {
+            "type": "string",
+            "default": "",
+            "description": "酒店类型"
+          },
+          "estimated_cost": {
+            "type": "integer",
+            "default": 0,
+            "description": "预估每晚费用（元）"
+          }
+        }
+      },
+      "Meal": {
+        "type": "object",
+        "required": ["type", "name"],
+        "description": "餐饮信息",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["breakfast", "lunch", "dinner", "snack"],
+            "description": "餐饮类型"
+          },
+          "name": {
+            "type": "string",
+            "description": "餐饮名称"
+          },
+          "address": {
+            "type": "string",
+            "description": "地址"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "description": {
+            "type": "string",
+            "description": "描述"
+          },
+          "estimated_cost": {
+            "type": "integer",
+            "default": 0,
+            "description": "预估费用（元）"
+          }
+        }
+      },
+      "Location": {
+        "type": "object",
+        "required": ["longitude", "latitude"],
+        "description": "地理位置（经纬度坐标）",
+        "properties": {
+          "longitude": {
+            "type": "number",
+            "format": "double",
+            "minimum": -180,
+            "maximum": 180,
+            "description": "经度",
+            "example": 116.397128
+          },
+          "latitude": {
+            "type": "number",
+            "format": "double",
+            "minimum": -90,
+            "maximum": 90,
+            "description": "纬度",
+            "example": 39.916527
+          }
+        }
+      },
+      "WeatherInfo": {
+        "type": "object",
+        "required": ["date"],
+        "description": "天气信息（温度字段支持字符串输入如 '25°C'，后端自动解析为数字）",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "日期"
+          },
+          "day_weather": {
+            "type": "string",
+            "default": "",
+            "description": "白天天气",
+            "example": "晴"
+          },
+          "night_weather": {
+            "type": "string",
+            "default": "",
+            "description": "夜间天气",
+            "example": "多云"
+          },
+          "day_temp": {
+            "oneOf": [
+              {"type": "integer"},
+              {"type": "string"}
+            ],
+            "default": 0,
+            "description": "白天温度（支持 '25°C' 格式，自动转为数字）",
+            "example": 32
+          },
+          "night_temp": {
+            "oneOf": [
+              {"type": "integer"},
+              {"type": "string"}
+            ],
+            "default": 0,
+            "description": "夜间温度",
+            "example": 20
+          },
+          "wind_direction": {
+            "type": "string",
+            "default": "",
+            "description": "风向",
+            "example": "南风"
+          },
+          "wind_power": {
+            "type": "string",
+            "default": "",
+            "description": "风力",
+            "example": "1-3级"
+          }
+        }
+      },
+      "Budget": {
+        "type": "object",
+        "description": "预算汇总",
+        "properties": {
+          "total_attractions": {
+            "type": "integer",
+            "default": 0,
+            "description": "景点门票总费用（元）"
+          },
+          "total_hotels": {
+            "type": "integer",
+            "default": 0,
+            "description": "酒店总费用（元）"
+          },
+          "total_meals": {
+            "type": "integer",
+            "default": 0,
+            "description": "餐饮总费用（元）"
+          },
+          "total_transportation": {
+            "type": "integer",
+            "default": 0,
+            "description": "交通总费用（元）"
+          },
+          "total": {
+            "type": "integer",
+            "default": 0,
+            "description": "总费用（元）"
+          }
+        }
+      },
+      "RouteRequest": {
+        "type": "object",
+        "required": ["origin_address", "destination_address"],
+        "description": "路线规划请求",
+        "properties": {
+          "origin_address": {
+            "type": "string",
+            "description": "起点地址",
+            "example": "北京市东城区景山前街4号"
+          },
+          "destination_address": {
+            "type": "string",
+            "description": "终点地址",
+            "example": "北京市东城区东长安街"
+          },
+          "origin_city": {
+            "type": "string",
+            "description": "起点城市（公交路线建议填写）"
+          },
+          "destination_city": {
+            "type": "string",
+            "description": "终点城市"
+          },
+          "route_type": {
+            "type": "string",
+            "enum": ["walking", "driving", "transit"],
+            "default": "walking",
+            "description": "路线类型"
+          }
+        }
+      },
+      "RouteResponse": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "message": {"type": "string"},
+          "data": {
+            "$ref": "#/components/schemas/RouteInfo"
+          }
+        }
+      },
+      "RouteInfo": {
+        "type": "object",
+        "description": "路线信息",
+        "properties": {
+          "distance": {
+            "type": "number",
+            "description": "距离（米）"
+          },
+          "duration": {
+            "type": "integer",
+            "description": "预计耗时（秒）"
+          },
+          "route_type": {
+            "type": "string",
+            "description": "路线类型"
+          },
+          "description": {
+            "type": "string",
+            "description": "路线描述"
+          }
+        }
+      },
+      "POISearchResponse": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "message": {"type": "string"},
+          "data": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/POIInfo"}
+          }
+        }
+      },
+      "POIInfo": {
+        "type": "object",
+        "required": ["id", "name", "type", "address", "location"],
+        "description": "POI兴趣点信息",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "POI ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "名称"
+          },
+          "type": {
+            "type": "string",
+            "description": "类型"
+          },
+          "address": {
+            "type": "string",
+            "description": "地址"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "tel": {
+            "type": "string",
+            "description": "电话"
+          }
+        }
+      },
+      "POIDetailResponse": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "message": {"type": "string"},
+          "data": {
+            "type": "object",
+            "description": "POI详情（结构依赖高德API返回）"
+          }
+        }
+      },
+      "WeatherResponse": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "message": {"type": "string"},
+          "data": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/WeatherInfo"}
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "default": false
+          },
+          "message": {
+            "type": "string",
+            "description": "错误描述"
+          },
+          "error_code": {
+            "type": "string",
+            "description": "错误代码（可选）"
+          }
+        }
+      },
+      "ValidationError": {
+        "type": "object",
+        "description": "FastAPI 参数校验错误（Pydantic）",
+        "properties": {
+          "detail": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "loc": {
+                  "type": "array",
+                  "items": {"type": "string"},
+                  "description": "错误字段路径"
+                },
+                "msg": {
+                  "type": "string",
+                  "description": "错误信息"
+                },
+                "type": {
+                  "type": "string",
+                  "description": "错误类型"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
